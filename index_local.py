@@ -179,22 +179,17 @@ def upload_video_to_bm_library(video_path, business_id, access_token, folder_id,
     try:
         # 打印请求参数以便调试
         print(f"正在处理视频: {video_path} 到文件夹ID: {folder_id}")
-
         # 获取文件夹名和文件名
         folder_name = os.path.basename(os.path.dirname(video_path))
         filename = os.path.basename(video_path)
-
         print(f"文件夹名: {folder_name}, 文件名: {filename}")
-
         # 腾讯云配置信息
         secret_id = ""
         secret_key = ""
         region = "ap-shanghai"
         bucket = "zh-video-1322637479"
-
         # 构造COS存储路径
         cos_key = f"zh_video/{folder_name}/{filename}".replace("\\", "/")
-
         # 使用requests库直接上传文件到COS
         print(f"正在上传视频到腾讯云COS: {cos_key}")
 
@@ -671,7 +666,7 @@ class BMApp:
         threading.Thread(target=load_folders_thread, daemon=True).start()
 
     def display_folder_data(self, detail, result):
-        """显示文件夹数据的UI部分，从show_bm_detail_page分离出来"""
+        """显示文件夹数据的UI部分，支持多级嵌套结构"""
         self.update_progress(80, "正在构建界面...")
 
         tk.Label(self.content_frame, text="BM 详情信息", font=("Arial", 14, "bold")).pack(pady=10)
@@ -687,39 +682,36 @@ class BMApp:
         tree = ttk.Treeview(
             frame,
             columns=("id", "full_path"),
-            show="tree headings",  # 树 + 列标题
+            show="tree headings",  # 显示树 + 表头
             height=10
         )
         tree.heading("#0", text="名称")
         tree.column("#0", anchor="w", width=200)
-
         tree.heading("id", text="ID")
         tree.column("id", anchor="w", width=150)
         tree.heading("full_path", text="路径")
         tree.column("full_path", anchor="w", width=250)
-
         tree.pack(side="left", fill="both", expand=True)
+
         # 添加滚动条
         sb = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
         sb.pack(side="right", fill="y")
         tree.configure(yscrollcommand=sb.set)
 
-        # 插入层级数据
+        # 🔁 递归插入多级节点
+        def insert_folder_node(parent, folder):
+            node = tree.insert(
+                parent, "end",
+                text=folder["name"],
+                values=(folder["id"], folder["full_path"])
+            )
+            for sub in folder.get("data", []):
+                insert_folder_node(node, sub)
+
+        # 插入全部数据
         if isinstance(result, list):
             for folder in result:
-                # 插入一级节点：parent=""，text=名称，values 对应 id 和 full_path
-                parent_node = tree.insert(
-                    "", "end",
-                    text=folder["name"],
-                    values=(folder["id"], folder["full_path"])
-                )
-                # 插入子节点：parent=parent_node
-                for sub in folder.get("data", []):
-                    tree.insert(
-                        parent_node, "end",
-                        text=sub["name"],
-                        values=(sub["id"], sub["full_path"])
-                    )
+                insert_folder_node("", folder)
 
         # 创建上传进度显示
         upload_frame = tk.LabelFrame(self.content_frame, text="上传进度", padx=10, pady=10)
